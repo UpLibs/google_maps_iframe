@@ -47,15 +47,9 @@ TODO
 CHANGELOG
 ---------
 
-  * version: 0.1.6:
-  GitHub integration.
+  * version: 0.1.1:
+  Fix load of iframe code.
 
-  * version: 0.1.5:
-  Added internal cache for computed mask of formatMask() function.
-
-  * version: 0.1.4:
-  Added formatMask() function. 
-
-  * version: 0.1.3:
-  Fixed some simple bugs. First stable version.
+  * version: 0.1.0:
+  First version
 

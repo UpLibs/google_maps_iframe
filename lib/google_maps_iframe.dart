@@ -2,6 +2,7 @@ library google_maps_iframe;
 
 import 'dart:html' ;
 import 'dart:js' ;
+import 'dart:async' ;
 
 class GMapLatLong {
 
@@ -131,7 +132,7 @@ class GMapIframe {
     
     content.children.add(_iframe) ;
     
-    _load() ;
+    _iframe.onLoad.listen( (e) => new Future.microtask( _load ) ) ;
   }
   
   GMapLatLong get center => _center ;
@@ -203,7 +204,10 @@ class GMapIframe {
   
   String get iframeID => _iframe.id ; 
   
+  bool _loaded = false ;
   void _load() {
+    if (_loaded) return ;
+    _loaded = true ;
     _loadIFrameContent() ;
   }
   
@@ -212,7 +216,6 @@ class GMapIframe {
     Function callBack = (String methodName, params) {
       window.alert('call> $methodName > $params') ;
     };
-    
     
     jsEval_PARAMS("""{
        var callBack = PARAMS[0] ;
