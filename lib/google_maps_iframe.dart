@@ -14,8 +14,39 @@ class GMapLatLong {
     this._longitude = longitude.toDouble() ;
   }
   
+  List<GMapLatLong> _group ;
+  
   GMapLatLong.group( List<GMapLatLong> group ) {
+    this._group = group ;
     setLatLongGroup(group) ;
+  }
+  
+  double getWidth() {
+    if (_group == null) return 0.0 ;
+    
+    double min = null ;
+    double max = null ;
+    
+    for (var ll in _group) {
+      if (min == null || min > ll.latitude) min = ll.latitude ;
+      if (max == null || max < ll.latitude) max = ll.latitude ;
+    }
+    
+    return max-min ;
+  }
+  
+  double getHeight() {
+    if (_group == null) return 0.0 ;
+    
+    double min = null ;
+    double max = null ;
+    
+    for (var ll in _group) {
+      if (min == null || min > ll.longitude) min = ll.longitude ;
+      if (max == null || max < ll.longitude) max = ll.longitude ;
+    }
+    
+    return max-min ;
   }
   
   double get latitude => _latitude ;
@@ -49,7 +80,41 @@ class GMapLatLong {
     setLatLong(centerX, centerY) ;
   }
   
+  int getGroupMapZoom() {
+    if (_group == null) return 2 ;
+    
+    double w = getWidth() ;
+    double h = getHeight() ;
+    
+    double d = w > h ? w : h ;
+    
+    if (d <= 0.5) return 12 ;
+    
+    if (d <= 1) return 11 ;
+    
+    if (d <= 2) return 8 ;
+    
+    if (d <= 5) return 7 ;
+    
+    return 2 ;
+  }
+  
 }
+
+
+class GMapMarker {
+
+  GMapLatLong _latLong ;
+  
+  String _name ;
+  
+  GMapMarker( this._latLong , this._name ) ;
+  
+  String get name => _name ;
+  GMapLatLong get latLong => _latLong ;
+  
+}
+
 
 class GMapIframe {
   
@@ -202,6 +267,13 @@ class GMapIframe {
   
   ////////////////////////////////////////////////////
   
+
+  StreamController<GMapMarker> _controller_onMarkerClick = new StreamController<GMapMarker>() ;
+  Stream<GMapMarker> get onMarkerClick => _controller_onMarkerClick.stream ;
+  
+  
+  ////////////////////////////////////////////////////
+  
   String get iframeID => _iframe.id ; 
   
   bool _loaded = false ;
@@ -212,16 +284,16 @@ class GMapIframe {
   }
   
   void _loadIFrameContent() {
-
-    Function callBack = (String methodName, params) {
-      window.alert('call> $methodName > $params') ;
+    
+    Function callBack_MarkerClick = (double lat, double long, String name) {
+      _controller_onMarkerClick.add( new GMapMarker(new GMapLatLong(lat, long), name) ) ;
     };
     
     jsEval_PARAMS("""{
-       var callBack = PARAMS[0] ;
+       var callBack_MarkerClick = PARAMS[0] ;
 
-       document.__GMapIframe__callBack = function(methodName, params) {
-          callBack(methodName , params) ;
+       document.__GMapIframe__callBack_MarkerClick = function(lat, long, name) {
+          callBack_MarkerClick(lat, long, name) ;
        };
 
        var myIframe = document.getElementById('$iframeID') ;
@@ -234,11 +306,11 @@ class GMapIframe {
 
        iFrameDoc.open() ;
 
-       iFrameDoc.write("<html><head><style type='text/css'> html { height: 100% } body { height: 100%; margin: 0; padding: 0 } #map-canvas { height: 100% } </style><script type='text/javascript' src='https://maps.googleapis.com/maps/api/js?sensor=true'></script>${ _gmapControlJS() }</head><body><div id='map-canvas'/></div></body></html>") ;
+       iFrameDoc.write("<html><head><style type='text/css'> html { height: 100% } body { height: 100%; margin: 0; padding: 0 } #map-canvas { height: 100% } </style><script type='text/javascript' src='https://maps.googleapis.com/maps/api/js?sensor=true'></script>${ _gmapControlJS() }</head><body onresize='resizeMapEvent()'><div id='map-canvas'/></div></body></html>") ;
 
        iFrameDoc.close() ;
 
-    }""" , [callBack]) ;
+    }""" , [callBack_MarkerClick]) ;
     
   }
   
@@ -255,12 +327,6 @@ class GMapIframe {
 
       document.gmap_parentDoc = window.parent.document ; 
     
-      document.gmapCommand = function(type, param) {
-        alert('cmd> '+ type +' ; '+ param);
-
-        document.gmap_parentDoc.__GMapIframe__callBack('mn:'+type , 'ps:'+param) ;
-      } ;
-
       document.gmap_getCenter = function() {
         return document.gmap.getCenter() ;
       } ;
@@ -287,6 +353,11 @@ class GMapIframe {
           map: document.gmap ,
           title: title
         });
+
+        google.maps.event.addListener(marker, 'click', function() {
+          var pos = marker.getPosition() ;
+          document.gmap_parentDoc.__GMapIframe__callBack_MarkerClick( pos.lat() , pos.lng() , marker.getTitle() ) ;
+        });
       } ;
 
       function mapTypeId(typeId) {
@@ -306,6 +377,10 @@ class GMapIframe {
         };
 
         document.gmap = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+      }
+
+      function resizeMapEvent() {
+        google.maps.event.trigger(document.gmap , 'resize');
       }
       
       google.maps.event.addDomListener(window, 'load', initialize);
