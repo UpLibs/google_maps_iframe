@@ -32,6 +32,8 @@ class GMapLatLong {
       if (max == null || max < ll.latitude) max = ll.latitude ;
     }
     
+    if ( min == null || max == null ) return 0.0 ;
+    
     return max-min ;
   }
   
@@ -45,6 +47,8 @@ class GMapLatLong {
       if (min == null || min > ll.longitude) min = ll.longitude ;
       if (max == null || max < ll.longitude) max = ll.longitude ;
     }
+    
+    if ( min == null || max == null ) return 0.0 ;
     
     return max-min ;
   }
@@ -73,11 +77,16 @@ class GMapLatLong {
       if (maxY == null || ll.longitude > maxY ) maxY = ll.longitude ;
       
     }
-
-    double centerX = minX + ((maxX - minX)/2) ;
-    double centerY = minY + ((maxY - minY)/2) ;
     
-    setLatLong(centerX, centerY) ;
+    if ( minX == null || maxX == null ) {
+      setLatLong(37.0625 , -95.677068) ;  
+    }
+    else {
+      double centerX = minX + ((maxX - minX)/2) ;
+      double centerY = minY + ((maxY - minY)/2) ;
+      
+      setLatLong(centerX, centerY) ;
+    }
   }
   
   int getGroupMapZoom() {
@@ -207,36 +216,100 @@ class GMapIframe {
   void setCenter( GMapLatLong latLong ) {
     this._center = latLong ;
     
-    callGMap_setCenter( latLong.latitude , latLong.longitude ) ;
+    _callGMap_setCenter( latLong.latitude , latLong.longitude ) ;
   }
   
   void setMapType(int mapType) {
-    callGMap_setMapType(mapType) ;
+    _callGMap_setMapType(mapType) ;
   }
   
   void setZoom(int zoom) {
-    callGMap_setZoom(zoom) ;
+    _callGMap_setZoom(zoom) ;
   }
   
-  void addMarker( GMapLatLong latLong , String title ) {
-    callGMap_addMarker( latLong.latitude , latLong.longitude , title ) ;
+  void addMarker( GMapLatLong latLong , String title , bool dropAnimation ) {
+    _callGMap_addMarker( latLong.latitude , latLong.longitude , title , dropAnimation ) ;
+  }
+  
+  bool containsMarker( GMapLatLong latLong , String title ) {
+    return _callGMap_containsMarker( latLong.latitude , latLong.longitude , title ) ;
+  }
+  
+  bool removeMarker( GMapLatLong latLong , String title ) {
+    return _callGMap_removeMarker( latLong.latitude , latLong.longitude , title ) ;
+  }
+  
+  int getMarkersSize() {
+    return _callGMap_getMarkersSize() ;
   }
   
   ////////////////////////////////////////////////////
   
-  void callGMap_Command(String type, String param) {
-      jsEval("""{
-         document.__GMapIframe__iframe_doc.gmapCommand('$type' , ${ param.contains('"') ? "'$param'" : '"$param"' }) ;
-      }""") ;
+  bool _gmapLoaded = false ;
+  
+  bool get isGMapLoaded => _gmapLoaded ; 
+  
+  void _onLoadGMap() {
+    _gmapLoaded = true ;
+    
+    _jsGMapEvalFlush() ;
   }
   
-  void callGMap_setCenter(double lat, double long) {
-      jsEval("""{
+  List<List> _evalCodes = [] ;
+  
+  void _jsGMapEvalFlush() {
+    for (var eval in _evalCodes) {
+      
+      String code = eval[0] ;
+      Function callBack = eval[1] ;
+      
+      var v ;
+      
+      if ( eval.length == 3 ) {
+        List params = eval[2] ;
+        v = jsEval_PARAMS(code, params) ;  
+      }
+      else {
+        v = jsEval(code) ;
+      }
+      
+      if (callBack != null) callBack(v) ;
+    }
+    
+    _evalCodes = [] ;
+  }
+  
+  void _jsGMapEval(String code , [callBack(value)] ) {
+    if (_gmapLoaded) {
+      var v = jsEval(code) ;
+      if (callBack != null) callBack(v) ;
+      return ;
+    }
+    
+    _evalCodes.add([code, callBack]) ;
+  }
+  
+  void _jsGMapEvalParams(String code, List params , [callBack(value)] ) {
+    if (_gmapLoaded) {
+      var v = jsEval_PARAMS(code, params) ;
+      if (callBack != null) callBack(v) ;
+      return ;
+    }
+    
+    _evalCodes.add( [code , callBack , params] ) ;
+  }
+  
+  //////////////////////////////////////////////////////
+  
+  void _callGMap_setCenter(double lat, double long) {
+    _jsGMapEval("""{
          document.__GMapIframe__iframe_doc.gmap_setCenter($lat , $long) ;
       }""") ;
   }
   
-  GMapLatLong callGMap_getCenter() {
+  GMapLatLong _callGMap_getCenter() {
+      if ( !_gmapLoaded ) return null ;
+    
       JsObject obj = jsEval("""{
          document.__GMapIframe__iframe_doc.gmap_getCenter() ;
       }""") ;
@@ -247,22 +320,46 @@ class GMapIframe {
       return new GMapLatLong(lat, long) ;
   }
   
-  void callGMap_setMapType(int mapType) {
-        jsEval("""{
-           document.__GMapIframe__iframe_doc.gmap_setMapType($mapType) ;
-        }""") ;
-    }
-  
-  void callGMap_setZoom(int zoom) {
-      jsEval("""{
-         document.__GMapIframe__iframe_doc.gmap_setZoom($zoom) ;
-      }""") ;
+  void _callGMap_setMapType(int mapType) {
+    _jsGMapEval("""{
+         document.__GMapIframe__iframe_doc.gmap_setMapType($mapType) ;
+    }""") ;
   }
   
-  void callGMap_addMarker(double lat, double long, String title) {
-      jsEval_PARAMS("""{
-         document.__GMapIframe__iframe_doc.gmap_addMark($lat,$long, PARAMS[0]) ;
-      }""" , [ title ]) ;
+  void _callGMap_setZoom(int zoom) {
+    _jsGMapEval("""{
+         document.__GMapIframe__iframe_doc.gmap_setZoom($zoom) ;
+    }""") ;
+  }
+  
+  void _callGMap_addMarker(double lat, double long, String title, bool dropAnimation) {
+    _jsGMapEvalParams("""{
+         document.__GMapIframe__iframe_doc.gmap_addMarker($lat,$long, PARAMS[0], ${ dropAnimation ? 1 : 0 }) ;
+    }""" , [ title ]) ;
+  }
+  
+  bool _callGMap_containsMarker(double lat, double long, String title) {
+    var ok = jsEval_PARAMS("""{
+         return document.__GMapIframe__iframe_doc.gmap_containsMarker($lat,$long, PARAMS[0]) ;
+    }""" , [ title ]) ;
+    
+    return ok ;
+  }
+  
+  bool _callGMap_removeMarker(double lat, double long, String title) {
+    var ok = jsEval_PARAMS("""{
+         return document.__GMapIframe__iframe_doc.gmap_removeMarker($lat,$long, PARAMS[0]) ;
+    }""" , [ title ]) ;
+    
+    return ok ;
+  }
+  
+  int _callGMap_getMarkersSize() {
+    int size = jsEval("""{
+         return document.__GMapIframe__iframe_doc.gmap_getMarkersSize() ;
+    }""") ;
+    
+    return size ;
   }
   
   ////////////////////////////////////////////////////
@@ -285,12 +382,21 @@ class GMapIframe {
   
   void _loadIFrameContent() {
     
+    Function callBack_OnLoad = () {
+      _onLoadGMap() ;
+    };
+    
     Function callBack_MarkerClick = (double lat, double long, String name) {
       _controller_onMarkerClick.add( new GMapMarker(new GMapLatLong(lat, long), name) ) ;
     };
     
     jsEval_PARAMS("""{
-       var callBack_MarkerClick = PARAMS[0] ;
+       var callBack_OnLoad = PARAMS[0] ;
+       var callBack_MarkerClick = PARAMS[1] ;
+
+       document.__GMapIframe__callBack_OnLoad = function() {
+          callBack_OnLoad() ;
+       };
 
        document.__GMapIframe__callBack_MarkerClick = function(lat, long, name) {
           callBack_MarkerClick(lat, long, name) ;
@@ -310,14 +416,8 @@ class GMapIframe {
 
        iFrameDoc.close() ;
 
-    }""" , [callBack_MarkerClick]) ;
+    }""" , [callBack_OnLoad, callBack_MarkerClick]) ;
     
-  }
-  
-  void callGMapCommand(String type, String param) {
-    jsEval("""{
-       document.__GMapIframe__iframe_doc.gmapCommand('$type' , ${ param.contains('"') ? "'$param'" : '"$param"' }) ;
-    }""") ;
   }
   
   String _gmapControlJS() {
@@ -347,12 +447,58 @@ class GMapIframe {
         document.gmap.setZoom(zoom) ;
       } ;
 
-      document.gmap_addMark = function(lat,long,title) {
+      var gmapMarkers = [] ;
+
+      document.gmap_getMarkersSize = function() {
+        return gmapMarkers.length ;
+      } ;
+
+      document.gmap_containsMarker = function(lat,long,title) {
+        var m = document.gmap_getMarker(lat,long,title) ;
+        return m != null ;
+      } ;
+
+      document.gmap_getMarker = function(lat,long,title) {
+        for (var i = 0; i < markers.length; i++) {
+          var m = markers[i] ;
+
+          if ( m.getTitle == title ) {
+            var p = m.getPosition() ;
+
+            var pLat = p.lat() ;
+            var pLng = p.lng() ;
+
+            var diffLat = pLat - lat ;
+            var diffLng = pLng - long ;
+
+            if (diffLat < 0) diffLat = -diffLat ;
+            if (diffLng < 0) diffLng = -diffLng ;
+
+            if (diffLat < 0.0001 && diffLng < 0.0001) return m ;
+          }
+        }
+
+        return null ;
+      } ;
+
+      document.gmap_removeMarker = function(lat,long,title) {
+        var m = document.gmap_getMarker(lat,long,title) ;
+        if ( m != null ) {
+          m.setMap(null) ;
+          return true ;
+        }
+        return false ;
+      } ;
+
+      document.gmap_addMarker = function(lat,long,title,dropAnim) {
         var marker = new google.maps.Marker({
           position: new google.maps.LatLng(lat,long) ,
           map: document.gmap ,
+          animation: dropAnim ? google.maps.Animation.DROP : null ,
           title: title
         });
+
+        gmapMarkers.push(marker) ;
 
         google.maps.event.addListener(marker, 'click', function() {
           var pos = marker.getPosition() ;
@@ -377,6 +523,8 @@ class GMapIframe {
         };
 
         document.gmap = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+
+        document.gmap_parentDoc.__GMapIframe__callBack_OnLoad() ;
       }
 
       function resizeMapEvent() {
